@@ -18,7 +18,7 @@ VALUES ('Human Resources Manager', 70000, 3);
 INSERT INTO role (title, salary, department_id)
 VALUES ('Human Resources Officer', 60000, 3);
 
-INSERT INTO employees (first_name, last_name, role_id, manager_id)
+INSERT INTO employee (first_name, last_name, role_id, manager_id)
 VALUES ('John', 'Doe', 1, null);
 INSERT INTO employee (first_name, last_name, role_id, manager_id)
 VALUES ('Jane', 'Doe', 2, 1);
