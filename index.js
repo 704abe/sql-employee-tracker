@@ -23,7 +23,7 @@ function mainMenu() {
             "view all departments", 
             "view all roles", 
             "view all employees",
-            // "add a department",
+            "add a department",
             // "add a role",
             // "add an employee",
             // "update an employee role",
@@ -84,16 +84,28 @@ function viewEmployees() {
     })
 }
 
-function addDepartment(){
-    inquirer.prompt([
-        {
-            type: "input",
-            name: "departmentName",
-            message: "What is the department name?"
-        }
-    ]).then(function (userInput) {
-        userInput.departmentName
-    }
+const addDepartment = async() => {
+    try {
+        let response = await inquirer.prompt([
+            {
+                name: 'deptName',
+                type: 'input',
+                message: 'What is the department name?'
+            }
+        ]);
+
+        // let sql = "INSERT INTO department (department_name) VALUES ?"
+        db.query(`INSERT INTO department (department_name) VALUES ('${response.deptName}')`, function (err, result){
+            if(err) throw err;
+            console.log(`added ${response.deptName} to departments.`)
+        });
+
+        mainMenu();
+
+    } catch (err) {
+        console.log('\n', 'this is in the catch', '\n\n', err);
+    };
+}
 
 // inquirer(employee){
 //     first_name?
