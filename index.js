@@ -28,6 +28,7 @@ async function mainMenu() {
             "add a role",
             "add an employee",
             "update an employee role",
+            "exit"
         ]
     }]).then((response) => {
         switch(response.mainMenuChoice) {
@@ -53,7 +54,7 @@ async function mainMenu() {
                 updateEmployee();
                 break;
             default:
-                mainMenu();
+                db.end();
                 break;
         }
     })
@@ -66,17 +67,25 @@ function viewDepartments() {
         let departmentArray = [];
         await res.forEach(department => departmentArray.push(department));
         console.table(departmentArray);
+        await inquirer.prompt({
+            name: 'continue',
+            type: 'input',
+            message: 'Press enter to continue...',
+          });
         mainMenu();
     });
 }
 
 function viewRoles() {
     console.log('\n\n view all roles \n');
-    db.query('SELECT * FROM role', async function (err, res) {
+    db.query('SELECT role.id, title, salary, department_name AS department FROM role LEFT JOIN department ON role.department_id = department.id', async function (err, res) {
         if (err) throw err;
-        let roleArray = [];
-        await res.forEach(role => roleArray.push(role));
-        console.table(roleArray);
+        console.table(res);
+        await inquirer.prompt({
+            name: 'continue',
+            type: 'input',
+            message: 'Press enter to continue...',
+          });
         mainMenu();
     })
 
@@ -84,11 +93,25 @@ function viewRoles() {
 
 function viewEmployees() {
     console.log('\n\n view all employees \n');
-    db.query('SELECT * FROM employee', async function (err, res) {
+    let query = `
+        SELECT employees.id, employees.first_name, employees.last_name, role.title, role.salary, CONCAT(manager.first_name, ' ', manager.last_name) AS manager, department_name AS department
+        FROM employee employees
+        LEFT JOIN employee manager
+            ON employees.manager_id = manager.id
+        LEFT JOIN role
+            ON employees.role_id = role.id
+        LEFT JOIN department
+            ON role.department_id = department.id`
+    db.query(query, async function (err, res) {
         if (err) throw err;
         let employeeArray = [];
         await res.forEach(employee => employeeArray.push(employee));
         console.table(employeeArray);
+        await inquirer.prompt({
+            name: 'continue',
+            type: 'input',
+            message: 'Press enter to continue...',
+          });
         mainMenu();
     });
 }
@@ -102,9 +125,14 @@ function addDepartment() {
             message: 'Name of new department?'
         }
     ]).then((response) => {
-        db.query(`INSERT INTO department (department_name) VALUES ('${response.deptName}')`, (err, result) => {
+        db.query(`INSERT INTO department (department_name) VALUES ('${response.deptName}')`, async function (err, result) {
             if (err){console.log(err)}
-            console.log(`\n\nadded ${response.deptName} to departments.\n`)
+            console.log(`\nadded ${response.deptName} to departments.\n`)
+            await inquirer.prompt({
+                name: 'continue',
+                type: 'input',
+                message: 'Press enter to continue...',
+              });
             mainMenu();
         })
     })
@@ -112,57 +140,89 @@ function addDepartment() {
 
 function addRole() {
     console.log('\nadd a role\n');
-    inquirer.prompt([
-        {
-            name: 'title',
-            type: 'input',
-            message: 'Name of new role?'
-        },
-        {
-            name: 'salary',
-            type: 'input',
-            message: 'Salary of new role?'
-        },
-        {
-            name: 'id',
-            type: 'input',
-            message: 'Department of new role? (enter id number)'
-        }
-    ]).then(response => { 
-        db.query(`INSERT INTO role (title, salary, department_id) VALUES ('${response.title}','${response.salary}','${response.id}')`, (err, result) => {
-            console.log('\n\n', `added ${response.title} to roles.`, '\n');
-            mainMenu();
-        });
-    })
+    db.query('SELECT * FROM department', async function (err, res) {
+        if (err) throw err;
+        inquirer.prompt([
+            {
+                name: 'title',
+                type: 'input',
+                message: 'Name of new role?'
+            },
+            {
+                name: 'salary',
+                type: 'input',
+                message: 'Salary of new role?'
+            },
+            {
+                name: 'id',
+                type: 'list',
+                message: 'Department of new role?',
+                choices: res.map(item => `${item.id} ${item.department_name}`)
+            }
+        ]).then(response => { 
+            let deptId = response.id[0];
+            db.query(`INSERT INTO role (title, salary, department_id) VALUES ('${response.title}','${response.salary}','${deptId}')`, async function (err, result) {
+                if (err) throw err;
+                console.log('\n', `added ${response.title} to roles.`, '\n');
+                await inquirer.prompt({
+                    name: 'continue',
+                    type: 'input',
+                    message: 'Press enter to continue...',
+                  });
+                mainMenu();
+            });
+        })
+    }) 
 }
 
 function addEmployee() {
     console.log('\nadd an employee\n');
-    inquirer.prompt([
-        {
-            name: 'firstName',
-            type: 'input',
-            message: 'First name?'
-        },
-        {
-            name: 'lastName',
-            type: 'input',
-            message: 'Last name?'
-        },
-        {
-            name: 'roleId',
-            type: 'input',
-            message: 'Role of new employee? (enter id number)'
-        },
-        {
-            name: 'managerId',
-            type: 'input',
-            message: 'Who is the manager of this employee? (enter id number)'
-        }
-    ]).then((response) => {
-        db.query(`INSERT INTO employee (first_name, last_name, role_id, manager_id) VALUES ('${response.firstName}','${response.lastName}','${response.roleId}','${response.managerId}' )`, (err, result) => {
-        console.log('\n\n', `added ${response.firstName} ${response.lastName} to employees.`, '\n');
-        mainMenu();
+    db.query('SELECT * FROM employee', async function (err2, res2){
+        if (err2) throw err2;
+        db.query('SELECT * FROM role', async function (err, res){
+            if (err) throw err;
+            let selectManager = res2.map(item => `${item.id} ${item.first_name} ${item.last_name}`)
+            selectManager.push('null');
+            inquirer.prompt([
+                {
+                    name: 'firstName',
+                    type: 'input',
+                    message: 'First name?'
+                },
+                {
+                    name: 'lastName',
+                    type: 'input',
+                    message: 'Last name?'
+                },
+                {
+                    name: 'role',
+                    type: 'list',
+                    message: 'Role of new employee?',
+                    choices: res.map(item => `${item.id} ${item.title}`)
+                },
+                {
+                    name: 'manager',
+                    type: 'list',
+                    message: 'Who is the manager of this employee?',
+                    choices: selectManager
+                }
+            ]).then((response) => {
+                let roleId = response.role[0];
+                let managerId = response.manager[0];
+                if(managerId === 'n'){
+                    managerId = 0
+                }
+                db.query(`INSERT INTO employee (first_name, last_name, role_id, manager_id) VALUES ('${response.firstName}','${response.lastName}','${roleId}','${managerId}' )`, async function (err, result) {
+                    if (err) throw err;
+                    console.log('\n', `added ${response.firstName} ${response.lastName} to employees.`, '\n');
+                    await inquirer.prompt({
+                        name: 'continue',
+                        type: 'input',
+                        message: 'Press enter to continue...',
+                    });
+                    mainMenu();
+                })
+            })
         })
     })
 }
@@ -171,17 +231,16 @@ async function updateEmployee() {
 
     db.query('SELECT * FROM employee', async function (err, res) {
         if (err) throw err;
-        // console.log(res);
         let response = await inquirer.prompt([
             {
                 name: 'employee',
                 type: 'list',
                 message: 'Which employee will be updated?',
-                choices: res.map(item => `${item.first_name} ${item.last_name} ${item.id}`)
+                choices: res.map(item => `${item.id} ${item.first_name} ${item.last_name}`)
             }
         ])
-        let employeeId = response.employee.slice(-1);
-        console.log(employeeId);
+        let employeeId = response.employee[0];
+        // console.log(employeeId);
         db.query('SELECT * FROM role', async function (err2, res2) {
             if (err2) throw err2;
             let response2 = await inquirer.prompt([
@@ -189,12 +248,38 @@ async function updateEmployee() {
                     name: 'role',
                     type: 'list',
                     message: 'Select a new role:',
-                    choices: res2.map(item => `${item.title} ${item.id}`)
+                    choices: res2.map(item => `${item.id} ${item.title}`)
                 }
             ])
-            let roleId = response2.role.slice(-1);
-            console.log(roleId);
-            db.query(`UPDATE employee SET role_id=${roleId} WHERE id=${employeeId}`);
+            let roleId = response2.role[0];
+            // console.log(roleId);
+            db.query('SELECT * FROM employee', async function (err3, res3) {
+                if (err3) throw err3;
+                let newManager = res3.map(item => `${item.id} ${item.first_name} ${item.last_name}`)
+                newManager.push('null');
+                let response3 = await inquirer.prompt([
+                    {
+                        name: 'manager',
+                        type: 'list',
+                        message: 'Select a new manager:',
+                        choices: newManager
+                    }
+                ])
+                let managerId = response3.manager[0];
+                if(managerId === 'n'){
+                    managerId = 0
+                }
+                db.query(`UPDATE employee SET role_id=${roleId}, manager_id=${managerId} WHERE id=${employeeId}`, async function (err, res) {
+                    if (err) throw err;
+                    console.log(`\nupdated ${(response.employee).slice(2)}'s role to ${(response2.role).slice(2)}.\n`)
+                    await inquirer.prompt({
+                        name: 'continue',
+                        type: 'input',
+                        message: 'Press enter to continue...',
+                    });
+                    mainMenu();
+                });
+            })
         })
     })
 }
